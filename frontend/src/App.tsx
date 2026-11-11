@@ -1,5 +1,20 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import './App.css'
+
+type GoogleCredentialResponse = { credential: string }
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: { client_id: string; callback: (response: GoogleCredentialResponse) => void }) => void
+          renderButton: (element: HTMLElement, options: { theme: string; size: string; width: number }) => void
+        }
+      }
+    }
+  }
+}
 
 type ApiStatus = 'checking' | 'connected' | 'unavailable'
 
@@ -100,10 +115,65 @@ type CurrentUser = {
 }
 
 function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+  const googleButton = useRef<HTMLDivElement>(null)
+  const businessNameInput = useRef<HTMLInputElement>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!googleClientId || !googleButton.current) return
+
+    const initializeGoogleButton = () => {
+      if (!window.google || !googleButton.current) return
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (credential) => {
+          setError(null)
+          setSubmitting(true)
+          void fetch('/api/v1/auth/google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              idToken: credential.credential,
+              businessName: businessNameInput.current?.value,
+            }),
+          }).then(async (response) => {
+            if (!response.ok) {
+              const problem = (await response.json().catch(() => ({}))) as { detail?: string }
+              throw new Error(problem.detail ?? 'Google sign-in failed. Try again.')
+            }
+            const authentication: LoginResponse = await response.json()
+            onLogin(authentication.accessToken)
+          }).catch((cause: unknown) => {
+            setError(cause instanceof Error ? cause.message : 'Google sign-in failed. Try again.')
+          }).finally(() => setSubmitting(false))
+        },
+      })
+      window.google.accounts.id.renderButton(googleButton.current, {
+        theme: 'outline',
+        size: 'large',
+        width: 320,
+      })
+    }
+
+    const existingScript = document.getElementById('google-identity-services') as HTMLScriptElement | null
+    if (window.google) {
+      initializeGoogleButton()
+    } else if (existingScript) {
+      existingScript.addEventListener('load', initializeGoogleButton, { once: true })
+    } else {
+      const script = document.createElement('script')
+      script.id = 'google-identity-services'
+      script.src = 'https://accounts.google.com/gsi/client'
+      script.async = true
+      script.defer = true
+      script.addEventListener('load', initializeGoogleButton, { once: true })
+      document.head.appendChild(script)
+    }
+  }, [googleClientId, onLogin])
 
   const signIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -162,6 +232,20 @@ function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
       >
         {submitting ? 'Signing in…' : 'Sign in'}
       </button>
+      {googleClientId && (
+        <>
+          <div className="my-5 border-t border-stone-200" />
+          <p className="mb-2 text-sm text-slate-600">For a new Google account, enter your business name:</p>
+          <input
+            ref={businessNameInput}
+            aria-label="Business name for a new Google account"
+            className="mb-4 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+            maxLength={160}
+            placeholder="Business name"
+          />
+          <div ref={googleButton} />
+        </>
+      )}
     </form>
   )
 }

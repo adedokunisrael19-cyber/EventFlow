@@ -48,6 +48,11 @@ public class AuthenticationService {
             throw new InvalidCredentialsException();
         }
 
+        return createSession(user);
+    }
+
+    @Transactional
+    public AuthenticationResponse createSession(User user) {
         byte[] randomBytes = new byte[32];
         SECURE_RANDOM.nextBytes(randomBytes);
         String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);

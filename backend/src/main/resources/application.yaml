@@ -28,6 +28,8 @@ spring:
             enable: ${MAIL_SMTP_STARTTLS:true}
 
 eventflow:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
   email:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:no-reply@eventflow.local}

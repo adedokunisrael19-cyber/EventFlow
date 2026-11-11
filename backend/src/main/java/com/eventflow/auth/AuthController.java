@@ -19,15 +19,18 @@ public class AuthController {
     private final RegistrationService registrationService;
     private final EmailVerificationService emailVerificationService;
     private final AuthenticationService authenticationService;
+    private final GoogleAuthenticationService googleAuthenticationService;
 
     public AuthController(
             RegistrationService registrationService,
             EmailVerificationService emailVerificationService,
-            AuthenticationService authenticationService
+            AuthenticationService authenticationService,
+            GoogleAuthenticationService googleAuthenticationService
     ) {
         this.registrationService = registrationService;
         this.emailVerificationService = emailVerificationService;
         this.authenticationService = authenticationService;
+        this.googleAuthenticationService = googleAuthenticationService;
     }
 
     @PostMapping("/register")
@@ -46,6 +49,13 @@ public class AuthController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(authenticationService.login(request.email(), request.password()));
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<AuthenticationResponse> googleSignIn(@Valid @RequestBody GoogleSignInRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(googleAuthenticationService.signIn(request));
     }
 
     @GetMapping("/me")
