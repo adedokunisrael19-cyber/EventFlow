@@ -2,6 +2,7 @@ package com.eventflow.common.exception;
 
 import com.eventflow.auth.EmailAlreadyRegisteredException;
 import com.eventflow.auth.InvalidEmailVerificationTokenException;
+import com.eventflow.auth.InvalidCredentialsException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,13 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
         problem.setTitle("Invalid verification link");
         return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    ResponseEntity<ProblemDetail> handleInvalidCredentials(InvalidCredentialsException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
+        problem.setTitle("Sign-in failed");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

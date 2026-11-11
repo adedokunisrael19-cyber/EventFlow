@@ -6,15 +6,11 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.HexFormat;
 
 @Service
 public class EmailVerificationService {
@@ -46,13 +42,13 @@ public class EmailVerificationService {
         String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
         Instant now = clock.instant();
 
-        tokenRepository.save(new EmailVerificationToken(user, hash(rawToken), now.plus(TOKEN_LIFETIME)));
+        tokenRepository.save(new EmailVerificationToken(user, TokenHasher.sha256(rawToken), now.plus(TOKEN_LIFETIME)));
         eventPublisher.publishEvent(new VerificationEmailRequested(user.getEmail(), rawToken));
     }
 
     @Transactional
     public void verify(String rawToken) {
-        EmailVerificationToken token = tokenRepository.findByTokenHashForUpdate(hash(rawToken))
+        EmailVerificationToken token = tokenRepository.findByTokenHashForUpdate(TokenHasher.sha256(rawToken))
                 .orElseThrow(InvalidEmailVerificationTokenException::new);
         Instant now = clock.instant();
         if (token.getUsedAt() != null || !token.getExpiresAt().isAfter(now)) {
@@ -66,13 +62,4 @@ public class EmailVerificationService {
         tokenRepository.save(token);
     }
 
-    private String hash(String rawToken) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is required by the Java platform.", exception);
-        }
-    }
 }

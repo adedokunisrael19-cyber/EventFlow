@@ -58,6 +58,7 @@ From `frontend/`, run `npm run build` to type-check and build the frontend.
 - Database credentials are read from environment variables and are not committed.
 - Registration creates an unverified account and sends a verification link only when `MAIL_ENABLED=true` and SMTP settings are configured in `.env`. For Gmail, use an App Password rather than the Google account password. Set `APP_BASE_URL` to the frontend origin that will handle `/verify-email` links.
 - Verification tokens expire after 24 hours, are single-use, and are stored in the database only as SHA-256 hashes. The email token is sent after the registration transaction commits.
+- Verified users can sign in at `POST /api/v1/auth/login`, use the returned eight-hour bearer token with `GET /api/v1/auth/me`, and revoke it with `POST /api/v1/auth/logout`. The frontend keeps this token in memory; signing in again is required after a page reload or token expiry.
 - Flyway owns database schema changes; Hibernate does not create or update tables.
 - The initial foundation intentionally has no business tables. Domain tables will arrive with their feature migrations.
 - Vite is pinned to version 7 for reliable builds in this Windows workspace; validate Vite 8 path handling before upgrading.

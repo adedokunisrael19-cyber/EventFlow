@@ -4,6 +4,9 @@ import com.eventflow.auth.dto.RegistrationRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,13 +18,16 @@ public class AuthController {
 
     private final RegistrationService registrationService;
     private final EmailVerificationService emailVerificationService;
+    private final AuthenticationService authenticationService;
 
     public AuthController(
             RegistrationService registrationService,
-            EmailVerificationService emailVerificationService
+            EmailVerificationService emailVerificationService,
+            AuthenticationService authenticationService
     ) {
         this.registrationService = registrationService;
         this.emailVerificationService = emailVerificationService;
+        this.authenticationService = authenticationService;
     }
 
     @PostMapping("/register")
@@ -33,5 +39,23 @@ public class AuthController {
     public EmailVerificationResponse verifyEmail(@Valid @RequestBody EmailVerificationRequest request) {
         emailVerificationService.verify(request.token());
         return new EmailVerificationResponse("Email address verified successfully.");
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<AuthenticationResponse> login(@Valid @RequestBody LoginRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(authenticationService.login(request.email(), request.password()));
+    }
+
+    @GetMapping("/me")
+    public CurrentUserResponse currentUser(@AuthenticationPrincipal CurrentUserPrincipal principal) {
+        return CurrentUserResponse.from(principal);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal CurrentUserPrincipal principal) {
+        authenticationService.logout(principal.sessionId());
+        return ResponseEntity.noContent().build();
     }
 }

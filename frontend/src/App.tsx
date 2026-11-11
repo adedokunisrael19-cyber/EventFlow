@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import './App.css'
 
 type ApiStatus = 'checking' | 'connected' | 'unavailable'
@@ -15,6 +15,7 @@ function App() {
 
 function FoundationPage() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking')
+  const [accessToken, setAccessToken] = useState<string | null>(null)
 
   useEffect(() => {
     const checkApi = async () => {
@@ -30,6 +31,10 @@ function FoundationPage() {
 
     void checkApi()
   }, [])
+
+  if (accessToken) {
+    return <WorkspaceSession token={accessToken} onLogout={() => setAccessToken(null)} />
+  }
 
   const statusText = {
     checking: 'Checking API connection',
@@ -79,8 +84,153 @@ function FoundationPage() {
             </p>
           </article>
         </div>
+
+        <LoginForm onLogin={setAccessToken} />
       </section>
     </main>
+  )
+}
+
+type LoginResponse = { accessToken: string; tokenType: string; expiresAt: string }
+type CurrentUser = {
+  email: string
+  fullName: string
+  workspaceName: string
+  role: string
+}
+
+function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const signIn = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError(null)
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      if (!response.ok) {
+        const problem = (await response.json().catch(() => ({}))) as { detail?: string }
+        setError(problem.detail ?? 'Sign-in failed. Check your details and email verification.')
+        return
+      }
+      const authentication: LoginResponse = await response.json()
+      onLogin(authentication.accessToken)
+      setPassword('')
+    } catch {
+      setError('EventFlow could not reach the sign-in service. Try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={(event) => void signIn(event)} className="max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+      <h2 className="font-semibold">Sign in</h2>
+      <p className="mt-2 text-sm text-slate-600">Use the email and password for your verified account.</p>
+      <label className="mt-5 block text-sm font-medium" htmlFor="login-email">Email address</label>
+      <input
+        autoComplete="email"
+        className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        id="login-email"
+        onChange={(event) => setEmail(event.target.value)}
+        required
+        type="email"
+        value={email}
+      />
+      <label className="mt-4 block text-sm font-medium" htmlFor="login-password">Password</label>
+      <input
+        autoComplete="current-password"
+        className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        id="login-password"
+        onChange={(event) => setPassword(event.target.value)}
+        required
+        type="password"
+        value={password}
+      />
+      {error && <p aria-live="polite" className="mt-3 text-sm text-red-700">{error}</p>}
+      <button
+        className="mt-5 w-full rounded-lg bg-emerald-800 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+        disabled={submitting}
+        type="submit"
+      >
+        {submitting ? 'Signing in…' : 'Sign in'}
+      </button>
+    </form>
+  )
+}
+
+function WorkspaceSession({ token, onLogout }: { token: string; onLogout: () => void }) {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/v1/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) throw new Error('Your session expired. Sign in again.')
+        const user: CurrentUser = await response.json()
+        if (!cancelled) setCurrentUser(user)
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load your account.')
+      }
+    }
+    void loadCurrentUser()
+    return () => { cancelled = true }
+  }, [token])
+
+  const signOut = async () => {
+    setLoggingOut(true)
+    try {
+      const response = await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.status === 401) {
+        onLogout()
+        return
+      }
+      if (!response.ok) throw new Error('Sign-out failed. Try again.')
+      onLogout()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Sign-out failed. Try again.')
+    } finally {
+      setLoggingOut(false)
+    }
+  }
+
+  return (
+    <section className="max-w-xl rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
+      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-800">Your workspace</p>
+      {currentUser ? (
+        <>
+          <h1 className="mt-3 text-2xl font-semibold">Welcome, {currentUser.fullName}</h1>
+          <p className="mt-2 text-slate-600">{currentUser.workspaceName}</p>
+          <p className="mt-1 text-sm text-slate-500">{currentUser.email} · {currentUser.role.replaceAll('_', ' ')}</p>
+        </>
+      ) : (
+        <p aria-live="polite" className="mt-3 text-sm text-slate-600">{error ?? 'Loading your workspace…'}</p>
+      )}
+      {error && currentUser && <p aria-live="polite" className="mt-4 text-sm text-red-700">{error}</p>}
+      <button
+        className="mt-6 rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold hover:bg-stone-50 disabled:opacity-60"
+        disabled={loggingOut}
+        onClick={() => void signOut()}
+        type="button"
+      >
+        {loggingOut ? 'Signing out…' : 'Sign out'}
+      </button>
+    </section>
   )
 }
 
