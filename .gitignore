@@ -1,0 +1,23 @@
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+.idea/
+
+# Java / Maven
+**/target/
+**/.tmp/
+*.class
+
+# Node / Vite
+**/node_modules/
+**/dist/
+frontend/.vite/
+
+# Local database data
+postgres-data/
+
+# Logs and operating system files
+*.log
+Thumbs.db
+.DS_Store
