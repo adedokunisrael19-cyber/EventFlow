@@ -10,7 +10,8 @@ public record CurrentUserPrincipal(
         String fullName,
         UUID workspaceId,
         String workspaceName,
-        String role
+        String role,
+        boolean hasPassword
 ) implements Principal {
 
     @Override

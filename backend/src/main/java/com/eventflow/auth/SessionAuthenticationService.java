@@ -49,7 +49,8 @@ public class SessionAuthenticationService {
                 user.getFullName(),
                 member.getWorkspace().getId(),
                 member.getWorkspace().getBusinessName(),
-                member.getRole().name()
+                member.getRole().name(),
+                user.getPasswordHash() != null
         );
     }
 }

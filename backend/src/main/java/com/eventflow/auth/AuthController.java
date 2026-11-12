@@ -20,17 +20,20 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
     private final AuthenticationService authenticationService;
     private final GoogleAuthenticationService googleAuthenticationService;
+    private final GooglePasswordSetupService googlePasswordSetupService;
 
     public AuthController(
             RegistrationService registrationService,
             EmailVerificationService emailVerificationService,
             AuthenticationService authenticationService,
-            GoogleAuthenticationService googleAuthenticationService
+            GoogleAuthenticationService googleAuthenticationService,
+            GooglePasswordSetupService googlePasswordSetupService
     ) {
         this.registrationService = registrationService;
         this.emailVerificationService = emailVerificationService;
         this.authenticationService = authenticationService;
         this.googleAuthenticationService = googleAuthenticationService;
+        this.googlePasswordSetupService = googlePasswordSetupService;
     }
 
     @PostMapping("/register")
@@ -56,6 +59,15 @@ public class AuthController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(googleAuthenticationService.signIn(request));
+    }
+
+    @PostMapping("/password")
+    public ResponseEntity<Void> setPassword(
+            @AuthenticationPrincipal CurrentUserPrincipal principal,
+            @Valid @RequestBody GooglePasswordSetupRequest request
+    ) {
+        googlePasswordSetupService.setPassword(principal.userId(), request.idToken(), request.password());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")

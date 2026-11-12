@@ -8,7 +8,8 @@ public record CurrentUserResponse(
         String fullName,
         UUID workspaceId,
         String workspaceName,
-        String role
+        String role,
+        boolean hasPassword
 ) {
 
     static CurrentUserResponse from(CurrentUserPrincipal principal) {
@@ -18,7 +19,8 @@ public record CurrentUserResponse(
                 principal.fullName(),
                 principal.workspaceId(),
                 principal.workspaceName(),
-                principal.role()
+                principal.role(),
+                principal.hasPassword()
         );
     }
 }

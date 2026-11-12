@@ -112,6 +112,7 @@ type CurrentUser = {
   fullName: string
   workspaceName: string
   role: string
+  hasPassword: boolean
 }
 
 function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
@@ -254,6 +255,51 @@ function WorkspaceSession({ token, onLogout }: { token: string; onLogout: () => 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [newPasswordError, setNewPasswordError] = useState<string | null>(null)
+  const [settingPassword, setSettingPassword] = useState(false)
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+  const passwordGoogleButton = useRef<HTMLDivElement>(null)
+  const newPasswordInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!googleClientId || currentUser?.hasPassword || !passwordGoogleButton.current || !window.google) return
+
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: (credential) => {
+        const password = newPasswordInput.current?.value ?? ''
+        if (password.length < 12 || password.length > 72) {
+          setNewPasswordError('Use a password between 12 and 72 characters.')
+          return
+        }
+
+        setNewPasswordError(null)
+        setSettingPassword(true)
+        void fetch('/api/v1/auth/password', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ idToken: credential.credential, password }),
+        }).then(async (response) => {
+          if (!response.ok) {
+            const problem = (await response.json().catch(() => ({}))) as { detail?: string }
+            throw new Error(problem.detail ?? 'Password could not be set. Try again.')
+          }
+          setCurrentUser((user) => user ? { ...user, hasPassword: true } : user)
+          if (newPasswordInput.current) newPasswordInput.current.value = ''
+        }).catch((cause: unknown) => {
+          setNewPasswordError(cause instanceof Error ? cause.message : 'Password could not be set. Try again.')
+        }).finally(() => setSettingPassword(false))
+      },
+    })
+    window.google.accounts.id.renderButton(passwordGoogleButton.current, {
+      theme: 'outline',
+      size: 'large',
+      width: 320,
+    })
+  }, [currentUser?.hasPassword, googleClientId, token])
 
   useEffect(() => {
     let cancelled = false
@@ -306,6 +352,31 @@ function WorkspaceSession({ token, onLogout }: { token: string; onLogout: () => 
         <p aria-live="polite" className="mt-3 text-sm text-slate-600">{error ?? 'Loading your workspace…'}</p>
       )}
       {error && currentUser && <p aria-live="polite" className="mt-4 text-sm text-red-700">{error}</p>}
+      {currentUser && !currentUser.hasPassword && googleClientId && (
+        <div className="mt-8 border-t border-stone-200 pt-6">
+          <h2 className="font-semibold">Add a password</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Set a password to sign in with your email too. For security, confirm your Google account again.
+          </p>
+          <label className="mt-4 block text-sm font-medium" htmlFor="new-account-password">New password</label>
+          <input
+            ref={newPasswordInput}
+            autoComplete="new-password"
+            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+            id="new-account-password"
+            maxLength={72}
+            minLength={12}
+            required
+            type="password"
+          />
+          <p className="mt-1 text-xs text-slate-500">Use 12 to 72 characters.</p>
+          {newPasswordError && <p aria-live="polite" className="mt-3 text-sm text-red-700">{newPasswordError}</p>}
+          <div className={`mt-4 ${settingPassword ? 'pointer-events-none opacity-60' : ''}`} ref={passwordGoogleButton} />
+        </div>
+      )}
+      {currentUser?.hasPassword && (
+        <p className="mt-6 text-sm text-emerald-700">Email and password sign-in is enabled for this account.</p>
+      )}
       <button
         className="mt-6 rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold hover:bg-stone-50 disabled:opacity-60"
         disabled={loggingOut}
